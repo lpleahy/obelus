@@ -311,3 +311,35 @@ T.it("inline dispatch spinner: outranks the DEFAULT extmark priority (diagnostic
   T.ok((found.priority or 0) > 4096, "spinner priority beats the diagnostics default (4096)")
   vim.api.nvim_buf_delete(buf, { force = true })
 end)
+
+T.it("inline spinner persists even while the thread's view is expanded", function()
+  -- regression: it used to clear when is_expanded() was true — with a streaming
+  -- reply (whose in-box spinner is gone once text arrives) that left NO working
+  -- indicator while the cursor sat on the comment's line.
+  local ctx = T.fresh()
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "local x = 1" })
+  vim.api.nvim_buf_set_name(buf, "/tmp/obelus-spinner-expanded-probe.lua")
+  local fname = vim.api.nvim_buf_get_name(buf)
+  local c = ctx.store.add(T.comment({ file = fname, comment = "check" }))
+  local render = require("obelus.render")
+  local real_expanded = render.is_expanded
+  render.is_expanded = function()
+    return true -- the band/popup IS showing this thread
+  end
+  local progress = require("obelus.progress")
+  local job = progress.start({ label = "probe", comments = { c } })
+  vim.wait(150)
+  local found = false
+  for name, ns in pairs(vim.api.nvim_get_namespaces()) do
+    if name:find("progress", 1, true) then
+      if #vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {}) > 0 then
+        found = true
+      end
+    end
+  end
+  render.is_expanded = real_expanded
+  pcall(progress.finish, job, true, "")
+  T.ok(found, "the spinner extmark stays while the view is expanded")
+  vim.api.nvim_buf_delete(buf, { force = true })
+end)

@@ -558,7 +558,11 @@ function M.render_md_harmonize()
   set("Obelus_RenderMdTableRow", {
     fg = color("RenderMarkdownTableRow", "fg") or color("Normal", "fg") or meta_fallback,
   })
+  -- bullets + ordered "1." markers are OVERLAY virt_text: a fg-only group
+  -- shows the WINDOW bg through (a dark box on the tinted bubble) — carry the
+  -- same seamless box_bg the heading strips use (nil under transparent)
   set("Obelus_RenderMdBullet", {
+    bg = box_bg,
     fg = color("RenderMarkdownBullet", "fg") or color("Normal", "fg") or meta_fallback,
   })
   -- '▋' blockquote bar: muted like Obelus_MarkviewBlockQuoteDefault, one colour for

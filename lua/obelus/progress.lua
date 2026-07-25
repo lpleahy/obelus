@@ -132,14 +132,14 @@ local function render()
   bufmap = mok and bufmap or nil
   for _, job in pairs(jobs) do
     if job.status == "running" then
-      -- re-evaluate EACH FRAME, per comment, which surface shows the worked thread (it
-      -- can change as the cursor moves or styles toggle): if a view shows the thread its
-      -- band carries the spinner (clear any inline); otherwise spin inline on its line.
+      -- the inline eol spinner stays up for the WHOLE run, expanded band or not:
+      -- it used to clear while the thread's view was open ("the band carries the
+      -- spinner"), but a STREAMING reply drops its in-box spinner as soon as
+      -- text arrives — with the cursor on the line that left no working
+      -- indicator at all beyond the grey narration.
       local visible = false
       for _, t in ipairs(job.inlines or {}) do
-        if is_expanded(t.comment, bufmap) then
-          clear_inline(t)
-        elseif mode == "auto" or mode == "inline" then
+        if mode == "auto" or mode == "inline" then
           set_inline(t, job.label, FRAMES[frame], "DiagnosticInfo")
           visible = true
         end
