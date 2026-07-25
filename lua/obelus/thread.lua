@@ -1898,7 +1898,16 @@ function M.build(comment, width, opts)
       end
     end
 
-    body_rows(rows, t, agent, bar, bg, code, body_hl, meta_hl, md, inner, live, spinner)
+    -- Narration greying + the in-box spinner are PER-TURN states: only the
+    -- turn actually being streamed into is provisional. `live` alone is
+    -- THREAD-level (a job backs this dispatch) — passing it to every turn
+    -- greyed the WHOLE history while a reply streamed (earlier FINALIZED
+    -- answers flashed grey until the stream settled). The in-flight turn is
+    -- the store's stream handle when one exists (survives a draft-save
+    -- pushing a you-turn past it), else — no handle (one-shot/legacy) — the
+    -- trailing agent turn.
+    local turn_live = live and (comment._stream_turn == t or (comment._stream_turn == nil and agent and i == #turns))
+    body_rows(rows, t, agent, bar, bg, code, body_hl, meta_hl, md, inner, turn_live, spinner)
     ::continue::
   end
 

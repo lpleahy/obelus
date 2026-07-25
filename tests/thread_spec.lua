@@ -923,3 +923,54 @@ T.it("store.abort clears narration_end on the kept partial turn", function()
   ctx.store.abort(c.id)
   T.is_nil(streamed.narration_end, "abort cleared it — a later stream can't re-grey this turn")
 end)
+
+T.it("narration: PREVIOUS finalized agent turns never grey while a new reply streams", function()
+  -- regression: `live` is thread-level; passing it to every turn greyed the
+  -- WHOLE history during a stream — old answers flashed grey, then white again
+  -- when the stream settled. Only the in-flight turn may grey.
+  local ctx = T.fresh()
+  local c = ctx.store.add(T.comment({ comment = "please fix" }))
+  ctx.store.add_turn(c.id, "agent", "The FINAL earlier answer.")
+  ctx.store.add_turn(c.id, "you", "follow-up question")
+  ctx.store.stream_start(c.id) -- the live tail: store's _stream_turn handle
+  ctx.store.stream_update(c.id, "Let me think about that…")
+
+  local rows = require("obelus.thread").build(ctx.store.get(c.id), 60, { markdown = true, rules = true, live = true })
+
+  local earlier_hl, streaming_hl
+  for _, r in ipairs(rows) do
+    if r.kind == "content" and r.agent then
+      for _, ch in ipairs(r.chunks) do
+        if ch[1]:find("FINAL earlier answer", 1, true) then
+          earlier_hl = ch[2]
+        elseif ch[1]:find("Let me think", 1, true) then
+          streaming_hl = ch[2]
+        end
+      end
+    end
+  end
+  T.eq(earlier_hl, "ObelusReplyText", "the finalized earlier turn keeps its normal rendering")
+  T.eq(streaming_hl, "ObelusReplyMeta", "only the in-flight streaming turn greys")
+  ctx.store.abort(c.id)
+end)
+
+T.it("narration: the stream HANDLE keeps greying scoped even when a draft-save pushed the tail", function()
+  local ctx = T.fresh()
+  local c = ctx.store.add(T.comment({ comment = "seed" }))
+  ctx.store.stream_start(c.id)
+  ctx.store.stream_update(c.id, "working on it…")
+  ctx.store.set_pending_you(c.id, "typed mid-stream") -- draft lands AFTER the stream turn
+  local rows = require("obelus.thread").build(ctx.store.get(c.id), 60, { markdown = true, rules = true, live = true })
+  local streaming_hl
+  for _, r in ipairs(rows) do
+    if r.kind == "content" and r.agent then
+      for _, ch in ipairs(r.chunks) do
+        if ch[1]:find("working on it", 1, true) then
+          streaming_hl = ch[2]
+        end
+      end
+    end
+  end
+  T.eq(streaming_hl, "ObelusReplyMeta", "the handle (not tail position) marks the live turn")
+  ctx.store.abort(c.id)
+end)
